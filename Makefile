@@ -3,11 +3,7 @@ include toolchain.mk
 .PHONY: clean run
 
 SOURCES	= kmain.o boot.o ports.o screen.o utils.o descriptor_tables.o gdt.o idt.o
-SOURCES	+= kmalloc.o interrupts.o debug.o paging.o icxxabi.o
-
-%.c: %.h
-
-%.cpp: %.h
+SOURCES	+= interrupts.o debug.o paging.o icxxabi.o kheap.o
 
 %.o: %.asm
 	$(NASM) $(NASMFLAGS) $<

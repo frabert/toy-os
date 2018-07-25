@@ -41,5 +41,7 @@ namespace os {
     void switch_page_directory(PageDirectory *page);
 
     Page *get_page(uintptr_t address, bool make, PageDirectory *dir);
+    void alloc_frame(Page* page, bool is_kernel, bool is_writeable);
+    void free_frame(Page *page);
   }
 }

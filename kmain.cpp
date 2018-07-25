@@ -5,20 +5,10 @@
 #include "ports.h"
 #include "debug.h"
 #include "paging.h"
+#include "kheap.h"
 #include <stddef.h>
 
 using os::Screen;
-
-template<typename Function>
-void test(Function f) {
-  f(1);
-  f(2);
-  f(3);
-}
-
-void func(int x) {
-  Screen::getInstance().write("world: %\n", x);
-}
 
 extern "C" int kmain(multiboot_info_t *mboot_ptr)
 {
@@ -33,12 +23,6 @@ extern "C" int kmain(multiboot_info_t *mboot_ptr)
   screen.write("Descriptor tables initialized\n");
   os::Paging::init();
   screen.write("Paging initialized\n");
-
-  test([&](int x) {
-    screen.write("hello: %\n", x);
-  });
-
-  test(func);
 
   return 0;
 }

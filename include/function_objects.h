@@ -47,63 +47,63 @@ namespace os {
     
     template<typename T>
     struct equal_to {
-      constexpr T operator()(const T &lhs, const T &rhs) const {
+      constexpr bool operator()(const T &lhs, const T &rhs) const {
         return lhs == rhs;
       }
     };
     
     template<typename T>
     struct not_equal_to {
-      constexpr T operator()(const T &lhs, const T &rhs) const {
+      constexpr bool operator()(const T &lhs, const T &rhs) const {
         return lhs != rhs;
       }
     };
     
     template<typename T>
     struct greater {
-      constexpr T operator()(const T &lhs, const T &rhs) const {
+      constexpr bool operator()(const T &lhs, const T &rhs) const {
         return lhs > rhs;
       }
     };
     
     template<typename T>
     struct less {
-      constexpr T operator()(const T &lhs, const T &rhs) const {
+      constexpr bool operator()(const T &lhs, const T &rhs) const {
         return lhs < rhs;
       }
     };
     
     template<typename T>
     struct greater_equal {
-      constexpr T operator()(const T &lhs, const T &rhs) const {
+      constexpr bool operator()(const T &lhs, const T &rhs) const {
         return lhs >= rhs;
       }
     };
     
     template<typename T>
     struct less_equal {
-      constexpr T operator()(const T &lhs, const T &rhs) const {
+      constexpr bool operator()(const T &lhs, const T &rhs) const {
         return lhs <= rhs;
       }
     };
     
     template<typename T>
     struct logical_and {
-      constexpr T operator()(const T &lhs, const T &rhs) const {
+      constexpr bool operator()(const T &lhs, const T &rhs) const {
         return lhs && rhs;
       }
     };
     
     template<typename T>
     struct logical_or {
-      constexpr T operator()(const T &lhs, const T &rhs) const {
+      constexpr bool operator()(const T &lhs, const T &rhs) const {
         return lhs || rhs;
       }
     };
     
     template<typename T>
     struct logical_not {
-      constexpr T operator()(const T &x) const {
+      constexpr bool operator()(const T &x) const {
         return !x;
       }
     };
