@@ -44,6 +44,11 @@ void kfree(void* p) {
   kernel_heap->free(p);
 }
 
+void *krealloc(void* p, size_t s) {
+  KASSERT(kernel_heap != nullptr);
+  return kernel_heap->realloc(p, s);
+}
+
 void *operator new(size_t size)
 {
   return kmalloc(size);
@@ -161,32 +166,29 @@ void os::Heap::expand(size_t newSize) {
   m_end_address = m_start_address+newSize;
 }
 
-int32_t os::Heap::contract(size_t new_size)
-{
-    // Sanity check.
-    KASSERT(new_size < m_end_address-m_start_address);
+int32_t os::Heap::contract(size_t new_size) {
+  // Sanity check.
+  KASSERT(new_size < m_end_address-m_start_address);
 
-    // Get the nearest following page boundary.
-    if (new_size&0x1000)
-    {
-        new_size &= 0x1000;
-        new_size += 0x1000;
-    }
+  // Get the nearest following page boundary.
+  if (new_size&0x1000) {
+    new_size &= 0x1000;
+    new_size += 0x1000;
+  }
 
-    // Don't contract too far!
-    if (new_size < HEAP_MIN_SIZE)
-        new_size = HEAP_MIN_SIZE;
+  // Don't contract too far!
+  if (new_size < HEAP_MIN_SIZE)
+    new_size = HEAP_MIN_SIZE;
 
-    int32_t old_size = m_end_address-m_start_address;
-    int32_t i = old_size - 0x1000;
-    while (new_size < i)
-    {
-        os::Paging::free_frame(os::Paging::get_page(m_start_address+i, 0, kernel_directory));
-        i -= 0x1000;
-    }
+  int32_t old_size = m_end_address-m_start_address;
+  int32_t i = old_size - 0x1000;
+  while (new_size < i) {
+    os::Paging::free_frame(os::Paging::get_page(m_start_address+i, 0, kernel_directory));
+    i -= 0x1000;
+  }
 
-    m_end_address = m_start_address + new_size;
-    return new_size;
+  m_end_address = m_start_address + new_size;
+  return new_size;
 }
 
 void* os::Heap::alloc(size_t size, bool align) {
@@ -280,15 +282,13 @@ void* os::Heap::alloc(size_t size, bool align) {
 
   // We may need to write a new hole after the allocated block.
   // We do this only if the new hole would have positive size...
-  if (orig_hole_size - new_size > 0)
-  {
+  if (orig_hole_size - new_size > 0) {
     Header *hole_header = (Header *) (orig_hole_pos + sizeof(Header) + size + sizeof(Footer));
     hole_header->magic    = HEAP_MAGIC;
     hole_header->is_hole  = 1;
     hole_header->size     = orig_hole_size - new_size;
     Footer *hole_footer = (Footer *) ( (uintptr_t)hole_header + orig_hole_size - new_size - sizeof(Footer) );
-    if ((uintptr_t)hole_footer < m_end_address)
-    {
+    if ((uintptr_t)hole_footer < m_end_address) {
       hole_footer->magic = HEAP_MAGIC;
       hole_footer->header = hole_header;
     }
@@ -378,4 +378,25 @@ void os::Heap::free(void *p) {
   // If required, add us to the index.
   if (do_add)
     m_index.insert(header);
+}
+
+void *os::Heap::realloc(void* p, size_t s) {
+  KASSERT(p != nullptr);
+  // Get the header and footer associated with this pointer.
+  Header *header = (Header*) ( (uintptr_t)p - sizeof(Header) );
+  Footer *footer = (Footer*) ( (uintptr_t)header + header->size - sizeof(Footer) );
+
+  // Sanity checks.
+  KASSERT(header->magic == HEAP_MAGIC);
+  KASSERT(footer->magic == HEAP_MAGIC);
+
+  // TODO: make this more efficient
+  void* new_mem = alloc(s);
+  if(s > header->size) {
+    memcpy(new_mem, p, header->size);
+  } else {
+    memcpy(new_mem, p, s);
+  }
+  free(p);
+  return new_mem;
 }

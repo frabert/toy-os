@@ -3,10 +3,11 @@
 #include <stddef.h>
 #include <function_objects.h>
 #include "kassert.h"
-#include "utils.h"
+#include <string.h>
+#include <kallocator.h>
 
 namespace os {
-  template<typename T, typename Allocator, typename Compare = os::std::less<T>>
+  template<typename T, typename Compare = os::std::less<T>, typename Allocator = os::KernelAllocator<T>>
   class OrderedArray {
   public:
     using value_type = T;
