@@ -28,10 +28,10 @@ extern "C" void irq_handler(Registers regs) {
   // If this interrupt involved the slave.
   if (regs.int_no >= 40) {
     // Send reset signal to slave.
-    port_write<uint8_t>(0xA0, 0x20);
+    outb(0xA0, 0x20);
   }
   // Send reset signal to master. (As well as slave, if necessary).
-  port_write<uint8_t>(0x20, 0x20);
+  outb(0x20, 0x20);
 
   if (interrupt_handlers[regs.int_no] != 0) {
     auto handler = interrupt_handlers[regs.int_no];

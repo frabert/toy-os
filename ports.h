@@ -2,38 +2,38 @@
 
 #include <stdint.h>
 
-template<typename T>
-inline void port_write(uint16_t port, T value);
-
-template<>
-inline void port_write(uint16_t port, uint8_t value) {
-  asm volatile ("outb %1, %0" : : "dN" (port), "a" (value));
+static inline void outb(uint16_t port, uint8_t val) {
+  asm volatile ( "outb %0, %1" : : "a"(val), "Nd"(port) );
 }
 
-template<>
-inline void port_write(uint16_t port, uint16_t value) {
-  asm volatile ("outw %1, %0" : : "dN" (port), "a" (value));
+static inline void outw(uint16_t port, uint16_t val) {
+  asm volatile ( "outb %0, %1" : : "a"(val), "Nd"(port) );
 }
 
-template<>
-inline void port_write(uint16_t port, uint32_t value) {
-  asm volatile ("outl %1, %0" : : "dN" (port), "a" (value));
+static inline void outd(uint16_t port, uint32_t val) {
+  asm volatile ( "outb %0, %1" : : "a"(val), "Nd"(port) );
 }
 
-inline uint8_t port_read8(uint16_t port) {
+static inline uint8_t inb(uint16_t port) {
   uint8_t ret;
-  asm volatile("inb %1, %0" : "=a" (ret) : "dN" (port));
+  asm volatile ( "inb %1, %0"
+                 : "=a"(ret)
+                 : "Nd"(port) );
   return ret;
 }
 
-inline uint16_t port_read16(uint16_t port) {
+static inline uint16_t inw(uint16_t port) {
   uint16_t ret;
-  asm volatile("inw %1, %0" : "=a" (ret) : "dN" (port));
+  asm volatile ( "inw %1, %0"
+                 : "=a"(ret)
+                 : "Nd"(port) );
   return ret;
 }
 
-inline uint32_t port_read32(uint16_t port) {
+static inline uint32_t ind(uint16_t port) {
   uint32_t ret;
-  asm volatile("inl %1, %0" : "=a" (ret) : "dN" (port));
+  asm volatile ( "ind %1, %0"
+                 : "=a"(ret)
+                 : "Nd"(port) );
   return ret;
 }

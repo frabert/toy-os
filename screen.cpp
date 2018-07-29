@@ -14,10 +14,10 @@ void Screen::init() {
 
 void Screen::move_cursor(uint8_t x, uint8_t y) {
   uint16_t location = y * 80 + x;
-  port_write<uint8_t>(0x3D4, 14);
-  port_write<uint8_t>(0x3D5, location >> 8);
-  port_write<uint8_t>(0x3D4, 15);
-  port_write<uint8_t>(0x3D5, location);
+  outb(0x3D4, 14);
+  outb(0x3D5, location >> 8);
+  outb(0x3D4, 15);
+  outb(0x3D5, location);
 }
 
 void Screen::scroll() {
