@@ -23,15 +23,15 @@ static size_t firstPde = 0;
 
 static int volatile liballoc_spinlock = 0;
 
-static void pageFaultHandler(os::Interrupts::Registers regs) {
+static void pageFaultHandler(os::Interrupts::Registers* regs) {
   uintptr_t faulting_address;
   asm volatile("mov %%cr2, %0" : "=r" (faulting_address));
 
   // The error code gives us details of what happened.
-  int present = regs.err_code & 0x1;  // Page not present
-  int rw = regs.err_code & 0x2;       // Write operation?
-  int us = regs.err_code & 0x4;       // Processor was in user-mode?
-  int reserved = regs.err_code & 0x8; // Overwritten CPU-reserved bits of page entry?
+  int present = regs->err_code & 0x1;  // Page not present
+  int rw = regs->err_code & 0x2;       // Write operation?
+  int us = regs->err_code & 0x4;       // Processor was in user-mode?
+  int reserved = regs->err_code & 0x8; // Overwritten CPU-reserved bits of page entry?
 
   uint32_t pde = (faulting_address & 0xFFC00000) >> 22;
   uint32_t pte = (faulting_address & 0x003FF000) >> 12;

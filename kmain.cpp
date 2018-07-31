@@ -23,7 +23,7 @@ extern "C" int kmain(multiboot_info_t *mboot_ptr) {
 
   os::DescriptorTables::init();
   screen.write("Descriptor tables initialized\n");
-  asm volatile("cli");
+  asm volatile("sti");
   os::Timer::init(50);
 
   multiboot_memory_map_t* mmap;

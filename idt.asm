@@ -104,7 +104,9 @@ isr_common_stub:
   mov fs, ax
   mov gs, ax
 
+  push esp
   call isr_handler
+  pop eax
 
   pop eax        ; reload the original data segment descriptor
   mov ds, ax
@@ -134,7 +136,9 @@ irq_common_stub:
   mov fs, ax
   mov gs, ax
 
+  push esp
   call irq_handler
+  pop eax
 
   pop ebx        ; reload the original data segment descriptor
   mov ds, bx

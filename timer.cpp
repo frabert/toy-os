@@ -4,7 +4,7 @@
 #include "screen.h"
 #include "debug.h"
 
-static void timer_callback(os::Interrupts::Registers regs) {
+static void timer_callback(os::Interrupts::Registers* regs) {
 }
 
 void os::Timer::init(uint32_t frequency) {
@@ -14,7 +14,7 @@ void os::Timer::init(uint32_t frequency) {
   // The value we send to the PIT is the value to divide it's input clock
   // (1193180 Hz) by, to get our required frequency. Important to note is
   // that the divisor must be small enough to fit into 16-bits.
-  uint32_t divisor = 1193180 / frequency;
+  uint16_t divisor = 1193180 / frequency;
 
   // Send the command byte.
   outb(0x43, 0x36);

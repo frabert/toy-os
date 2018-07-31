@@ -27,7 +27,7 @@ namespace os {
       uint32_t eip, cs, eflags, useresp, ss; // Pushed by the processor automatically.
     };
 
-    using InterruptServiceRoutine = void(Registers);
+    using InterruptServiceRoutine = void(Registers*);
     void registerInterruptHandler(uint8_t n, InterruptServiceRoutine* handler);
   }
 }
