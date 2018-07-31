@@ -2,184 +2,231 @@
 
 #include <stdint.h>
 #include "kheap.h"
-#include "kassert.h"
-#include "utils.h"
+#include <kassert.h>
+#include <string.h>
 #include "interrupts.h"
 #include "kheap.h"
+#include <bitset.h>
+#include "reflection.h"
+#include "screen.h"
+#include "liballoc.h"
+#include "synchro.h"
 
 using namespace os::Paging;
 
-extern uintptr_t placement_address;
-extern os::Heap* kernel_heap;
+static PageDirectory* directory;
+static os::bitset<>* memoryMap;
+static uintptr_t heapStart;
+static size_t heapSize = 0;
 
-// A bitset of frames - used or free.
-uint32_t *frames;
-uint32_t nframes;
+static size_t firstPde = 0;
 
-// Macros used in the bitset algorithms.
-#define INDEX_FROM_BIT(a) (a/(8*4))
-#define OFFSET_FROM_BIT(a) (a%(8*4))
+static int volatile liballoc_spinlock = 0;
 
-// Static function to set a bit in the frames bitset
-static void set_frame(uint32_t frame_addr) {
-  uint32_t frame = frame_addr/0x1000;
-  uint32_t idx = INDEX_FROM_BIT(frame);
-  uint32_t off = OFFSET_FROM_BIT(frame);
-  frames[idx] |= (0x1 << off);
-}
-
-// Static function to clear a bit in the frames bitset
-static void clear_frame(uint32_t frame_addr) {
-  uint32_t frame = frame_addr/0x1000;
-  uint32_t idx = INDEX_FROM_BIT(frame);
-  uint32_t off = OFFSET_FROM_BIT(frame);
-  frames[idx] &= ~(0x1 << off);
-}
-
-// Static function to test if a bit is set.
-static uint32_t test_frame(uint32_t frame_addr) {
-  uint32_t frame = frame_addr/0x1000;
-  uint32_t idx = INDEX_FROM_BIT(frame);
-  uint32_t off = OFFSET_FROM_BIT(frame);
-  return (frames[idx] & (0x1 << off));
-}
-
-// Static function to find the first free frame.
-static uint32_t first_frame() {
-  uint32_t i, j;
-  for (i = 0; i < INDEX_FROM_BIT(nframes); i++) {
-    if (frames[i] != 0xFFFFFFFF) {
-      // at least one bit is free here.
-      for (j = 0; j < 32; j++) {
-        uint32_t toTest = 0x1 << j;
-        if ( !(frames[i]&toTest) ) {
-          return i*4*8+j;
-        }
-      }
-    }
-  }
-  return (uint32_t)-1;
-}
-
-// The kernel's page directory
-PageDirectory *kernel_directory = nullptr;
-
-// The current page directory;
-static PageDirectory *current_directory = nullptr;
-
-void os::Paging::alloc_frame(Page* page, bool is_kernel, bool is_writeable) {
-  if (page->frame != 0) {
-    return; // Frame was already allocated, return straight away.
-  } else {
-    uint32_t idx = first_frame(); // idx is now the index of the first free frame.
-    KASSERT_MSG(idx != (uint32_t)-1, "No free frames");
-    set_frame(idx * 0x1000); // this frame is now ours!
-    page->present = 1; // Mark it as present.
-    page->rw = (is_writeable)?1:0; // Should the page be writeable?
-    page->user = (is_kernel)?0:1; // Should the page be user-mode?
-    page->frame = idx;
-  }
-}
-
-void os::Paging::free_frame(Page *page) {
-  uint32_t frame;
-  if (!(frame=page->frame)) {
-    return; // The given page didn't actually have an allocated frame!
-  } else {
-    clear_frame(frame); // Frame is now free again.
-    page->frame = 0x0; // Page now doesn't have a frame.
-  }
-}
-
-static void page_fault(os::Interrupts::Registers regs) {
-  // A page fault has occurred.
-  // The faulting address is stored in the CR2 register.
-  uint32_t faulting_address;
+static void pageFaultHandler(os::Interrupts::Registers regs) {
+  uintptr_t faulting_address;
   asm volatile("mov %%cr2, %0" : "=r" (faulting_address));
 
   // The error code gives us details of what happened.
-  int present   = !(regs.err_code & 0x1); // Page not present
-  int rw = regs.err_code & 0x2;           // Write operation?
-  int us = regs.err_code & 0x4;           // Processor was in user-mode?
-  int reserved = regs.err_code & 0x8;     // Overwritten CPU-reserved bits of page entry?
-  int id = regs.err_code & 0x10;          // Caused by an instruction fetch?
+  int present = regs.err_code & 0x1;  // Page not present
+  int rw = regs.err_code & 0x2;       // Write operation?
+  int us = regs.err_code & 0x4;       // Processor was in user-mode?
+  int reserved = regs.err_code & 0x8; // Overwritten CPU-reserved bits of page entry?
 
-  // Output an error message.
-
-  KPANIC("Page fault (present % read-only % user-mode % reserved %) at %\n", present, rw, us, reserved, (void*)faulting_address);
-} 
-
-void os::Paging::init() {
-  // The size of physical memory. For the moment we
-  // assume it is 16MB big.
-  uint32_t mem_end_page = 0x1000000;
-
-  nframes = mem_end_page / 0x1000;
-  frames = (uint32_t*)kmalloc(INDEX_FROM_BIT(nframes));
-  memset(frames, 0, INDEX_FROM_BIT(nframes));
-
-  // Let's make a page directory.
-  kernel_directory = (PageDirectory*)kmalloc_align(sizeof(PageDirectory));
-  memset(kernel_directory, 0, sizeof(PageDirectory));
-  current_directory = kernel_directory;
-
-  uintptr_t i;
-  for(i = os::KHEAP_START; i < os::KHEAP_START + os::KHEAP_INITIAL_SIZE; i += 0x1000) {
-    get_page(i, true, kernel_directory);
-  }
-
-  // We need to identity map (phys addr = virt addr) from
-  // 0x0 to the end of used memory, so we can access this
-  // transparently, as if paging wasn't enabled.
-  // NOTE that we use a while loop here deliberately.
-  // inside the loop body we actually change placement_address
-  // by calling kmalloc(). A while loop causes this to be
-  // computed on-the-fly rather than once at the start.
-  i = 0;
-  while (i < placement_address + 0x1000) {
-      // Kernel code is readable but not writeable from userspace.
-      alloc_frame(get_page(i, 1, kernel_directory), 0, 0);
-      i += 0x1000;
-  }
-
-  // Now allocate those pages we mapped earlier.
-  for (i = KHEAP_START; i < KHEAP_START + KHEAP_INITIAL_SIZE; i += 0x1000)
-    alloc_frame(get_page(i, 1, kernel_directory), 0, 0);
-
-  // Before we enable paging, we must register our page fault handler.
-  os::Interrupts::register_interrupt_handler(14, page_fault);
-
-  // Now, enable paging!
-  switch_page_directory(kernel_directory);
-
-  kernel_heap = new os::Heap(KHEAP_START, KHEAP_START + KHEAP_INITIAL_SIZE, 0xCFFFF000, false, false);
+  uint32_t pde = (faulting_address & 0xFFC00000) >> 22;
+  uint32_t pte = (faulting_address & 0x003FF000) >> 12;
+  
+  os::Screen::getInstance().write("Page fault (% % % %) at %\n",
+    present ? "present" : "",
+    rw ? "readonly" : "",
+    us ? "usermode" : "",
+    reserved ? "reserved" : "",
+    (void*)faulting_address);
+  while(true) {}
 }
 
-void os::Paging::switch_page_directory(PageDirectory *dir) {
-   current_directory = dir;
-   uintptr_t addr = (uintptr_t)&dir->tablesPhysical;
-   asm volatile("mov %0, %%cr3":: "r"(addr));
-   uint32_t cr0;
-   asm volatile("mov %%cr0, %0": "=r"(cr0));
-   cr0 |= 0x80000000; // Enable paging!
-   asm volatile("mov %0, %%cr0":: "r"(cr0));
+static void loadPageDirectory(PageDirectory *dir) {
+  assert(!((uintptr_t)dir & 0x00000FFF));
+  asm volatile("mov %0, %%cr3":: "r"(dir));
 }
 
-Page *os::Paging::get_page(uintptr_t addr, bool make, PageDirectory *dir) {
-  size_t address = (size_t)addr;
-  // Turn the address into an index.
-  address /= 0x1000;
-  // Find the page table containing this address.
-  size_t table_idx = address / 1024;
-  if (dir->tables[table_idx] != nullptr) {
-      return &dir->tables[table_idx]->pages[address%1024];
-  } else if(make) {
-    void* tmp;
-    dir->tables[table_idx] = (PageTable*)kmalloc_align(sizeof(PageTable), &tmp);
-    memset(dir->tables[table_idx], 0, 0x1000);
-    dir->tablesPhysical[table_idx] = (uintptr_t)tmp | 0x7; // PRESENT, RW, US.
-    return &dir->tables[table_idx]->pages[address % 1024];
-  } else {
-    return 0;
+static void enablePaging() {
+  uint32_t cr0;
+  asm volatile("mov %%cr0, %0": "=r"(cr0));
+  cr0 |= 0x80000000; // Enable paging!
+  asm volatile("mov %0, %%cr0":: "r"(cr0));
+}
+
+void os::Paging::identity_map(uintptr_t start, uintptr_t end, bool rw, bool user) {
+  assert(start < end);
+
+  auto& dir = *directory;
+
+  for(uintptr_t i = start; i < end; i += 0x1000) {
+    uint32_t pde = (i & 0xFFC00000) >> 22;
+    uint32_t pte = (i & 0x003FF000) >> 12;
+    uint32_t frame = i & 0x00000FFF;
+
+    PageTable* table = nullptr;
+
+    if(!dir[pde].present) {
+      dir[pde].present = 1;
+      dir[pde].rw = rw ? 1 : 0;
+      dir[pde].user = user ? 1 : 0;
+
+      table = (PageTable*)kmalloc_align(sizeof(PageTable));
+      memset(table, 0, sizeof(PageTable));
+      dir[pde].addr = (uintptr_t)table / 0x1000;
+    } else {
+      table = (PageTable*)(dir[pde].addr * 0x1000);
+    }
+
+    assert(table != nullptr);
+
+    auto& table_ref = *table;
+
+    if(!table_ref[pte].present) {
+      table_ref[pte].present = 1;
+      table_ref[pte].rw = 1;
+      table_ref[pte].addr = i / 0x1000;
+    }
+  }
+}
+
+void os::Paging::init(multiboot_memory_map_t* map, size_t mapLength) {
+  directory = (PageDirectory*)kmalloc_align(sizeof(*directory));
+  directory->fill({0});
+
+  multiboot_memory_map_t* mmap = map;
+  while((uintptr_t)mmap < (uintptr_t)map + mapLength) {
+    if(mmap->type == MULTIBOOT_MEMORY_AVAILABLE) {
+      identity_map(mmap->addr, mmap->addr + mmap->len);
+      if(mmap->len > heapSize) {
+        heapSize = mmap->len;
+        heapStart = mmap->addr;
+        if(heapStart & 0x00000FFF) {
+          size_t tmp = heapStart;
+          heapStart &= 0x00000FFF;
+          heapStart += 0x1000;
+          heapSize -= (heapStart - tmp);
+        }
+      }
+    }
+    mmap = (multiboot_memory_map_t*) ( (uintptr_t)mmap + mmap->size + sizeof(mmap->size) );
+  }
+  identity_map(Reflection::getKernelStart(), Reflection::getKernelEnd(), false);
+
+  auto& dir = *directory;
+
+  if(heapStart < Reflection::getKernelEnd()) {
+    uintptr_t nextPage = Reflection::getKernelEnd();
+    if(nextPage & 0x00000FFF) {
+      nextPage &= 0xFFFFF000;
+      nextPage += 0x1000;
+    }
+
+    size_t tmp = heapStart;
+    heapStart = nextPage;
+    heapSize -= (heapStart - tmp);
+  }
+
+  memoryMap = new os::bitset<>(heapSize / 0x1000);
+  firstPde = 1024 - heapSize / (0x1000 * 1024);
+
+  os::Interrupts::registerInterruptHandler(14, pageFaultHandler);
+
+  loadPageDirectory(directory);
+  enablePaging();
+}
+
+os::std::pair<uintptr_t, bool> os::Paging::translate(uintptr_t virtAddr) {
+  assert(directory != nullptr);
+  uint32_t pde = (virtAddr & 0xFFC00000) >> 22;
+  uint32_t pte = (virtAddr & 0x003FF000) >> 12;
+  uint32_t offs = virtAddr & 0x00000FFF;
+
+  auto& dir = *directory;
+  if(dir[pde].present) {
+    auto& table = *((PageTable*)(dir[pde].addr * 0x1000));
+    if(table[pte].present) {
+      return {(table[pte].addr * 0x1000) | offs, true};
+    }
+  }
+  return {0, false};
+}
+
+int liballoc_lock() {
+  spinlock_acquire(&liballoc_spinlock);
+  return 0;
+}
+
+int liballoc_unlock() {
+  spinlock_release(&liballoc_spinlock);
+  return 0;
+}
+
+void* liballoc_alloc(int n) {
+  assert(directory != nullptr);
+  uintptr_t res = 0;
+  auto& dir = *directory;
+  for(int i = 0; i < n; i++) {
+    size_t freeFrame = memoryMap->firstFree();
+    size_t pde = freeFrame / 1024 + firstPde;
+    size_t pte = freeFrame % 1024;
+
+    if(res == 0) {
+      res = (pde << 22) | (pte << 12);
+    }
+    
+    PageTable* table = nullptr;
+
+    if(!dir[pde].present) {
+      dir[pde].present = 1;
+      dir[pde].rw = 1;
+      
+      table = (PageTable*)kmalloc_align(sizeof(PageTable));
+      memset(table, 0, sizeof(PageTable));
+      dir[pde].addr = (uintptr_t)table / 0x1000;
+    } else {
+      table = (PageTable*)(dir[pde].addr * 0x1000);
+    }
+
+    assert(table != nullptr);
+
+    auto& table_ref = *table;
+
+    assert(!((heapStart + freeFrame * 0x1000) & 0x00000FFF));
+
+    if(!table_ref[pte].present) {
+      table_ref[pte].present = 1;
+      table_ref[pte].rw = 1;
+      table_ref[pte].addr = (heapStart + freeFrame * 0x1000) / 0x1000;
+    }
+
+    memoryMap->set(freeFrame);
+  }
+  loadPageDirectory(directory);
+  return (void*)res;
+}
+
+int liballoc_free(void* addr, int n) {
+  assert(directory != nullptr);
+  auto& dir = *directory;
+  size_t frame = (uintptr_t)addr / 0x1000;
+
+  for(int i = 0; i < n; i++) {
+    size_t pde = frame / 1024 - firstPde;
+    size_t pte = frame % 1024;
+
+    assert(dir[pde].present);
+
+    auto& table = *((PageTable*)(dir[pde].addr * 0x1000));
+
+    assert(table[pte].present);
+
+    table[pte].present = 0;
+    memoryMap->unset(frame);
+
+    frame++;
   }
 }

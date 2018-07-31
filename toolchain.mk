@@ -5,9 +5,10 @@ CC		=	$(PREFIX)/bin/$(TARGET)-gcc
 CXX		=	$(PREFIX)/bin/$(TARGET)-g++
 LD		=	$(PREFIX)/bin/$(TARGET)-ld
 AS		=	$(PREFIX)/bin/$(TARGET)-as
+AR		=	$(PREFIX)/bin/$(TARGET)-ar
 NASM	=	nasm
 
-CFLAGS			=	-ffreestanding -nostdlib -fno-builtin -fno-stack-protector -Wall -g -I include
-CXXFLAGS		=	-ffreestanding -nostdlib -fno-builtin -fno-stack-protector -Wall -std=c++17 -g -I include
+CFLAGS			=	-ffreestanding -Wall -I -std=c11 include -g
+CXXFLAGS		=	-ffreestanding -Wall -std=c++17 -I include -g
 LDFLAGS			=	-Tlink.lds
 NASMFLAGS		=	-felf

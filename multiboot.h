@@ -18,11 +18,12 @@
  *  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
  *  IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-
 #include <stdint.h>
 
 #ifndef MULTIBOOT_HEADER
 #define MULTIBOOT_HEADER 1
+
+#define GRUB_PACKED __attribute__((packed))
 
 /* How many bytes from the start of the file we search for the header.  */
 #define MULTIBOOT_SEARCH			8192

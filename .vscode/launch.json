@@ -9,11 +9,11 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/kernel",
-      "args": ["-f", "bochs.txt"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [],
       "externalConsole": true,
+      "preLaunchTask": "debug",
       "MIMode": "gdb",
       "miDebuggerServerAddress": "localhost:1234",
       "setupCommands": [

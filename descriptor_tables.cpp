@@ -134,8 +134,8 @@ struct IdtEntry {
       addr & 0xFFFF,
       selector,
       0,
-      (addr >> 16) & 0xFFFF,
-      lev | 0x8E 
+      lev | 0x8E,
+      (addr >> 16) & 0xFFFF
     };
   }
 };
@@ -158,39 +158,10 @@ struct IdtPointer {
 extern "C" {
   void gdt_flush(GdtPointer*);
   void idt_flush(IdtPointer*);
-  void isr0();
-  void isr1();
-  void isr2();
-  void isr3();
-  void isr4();
-  void isr5();
-  void isr6();
-  void isr7();
-  void isr8();
-  void isr9();
-  void isr10();
-  void isr11();
-  void isr12();
-  void isr13();
-  void isr14();
-  void isr15();
-  void isr16();
-  void isr17();
-  void isr18();
-  void isr19();
-  void isr20();
-  void isr21();
-  void isr22();
-  void isr23();
-  void isr24();
-  void isr25();
-  void isr26();
-  void isr27();
-  void isr28();
-  void isr29();
-  void isr30();
-  void isr31();
 }
+
+extern "C" IdtEntry::interrupt_handler *isr_handlers[];
+extern "C" uint32_t isr_handlers_count;
 
 array<GdtEntry, 5> gdt_entries;
 GdtPointer gdt_ptr;
@@ -226,38 +197,9 @@ static void init_idt()
 
   memset(&idt_entries, 0, sizeof(IdtEntry)*256);
 
-  idt_entries [0] = IdtEntry::makeEntry(isr0,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries [1] = IdtEntry::makeEntry(isr1,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries [2] = IdtEntry::makeEntry(isr2,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries [3] = IdtEntry::makeEntry(isr3,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries [4] = IdtEntry::makeEntry(isr4,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries [5] = IdtEntry::makeEntry(isr5,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries [6] = IdtEntry::makeEntry(isr6,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries [7] = IdtEntry::makeEntry(isr7,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries [8] = IdtEntry::makeEntry(isr8,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries [9] = IdtEntry::makeEntry(isr9,  0x8E, PrivilegeLevel::Ring0);
-  idt_entries[10] = IdtEntry::makeEntry(isr10, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[11] = IdtEntry::makeEntry(isr11, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[12] = IdtEntry::makeEntry(isr12, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[13] = IdtEntry::makeEntry(isr13, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[14] = IdtEntry::makeEntry(isr14, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[15] = IdtEntry::makeEntry(isr15, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[16] = IdtEntry::makeEntry(isr16, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[17] = IdtEntry::makeEntry(isr17, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[18] = IdtEntry::makeEntry(isr18, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[19] = IdtEntry::makeEntry(isr19, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[20] = IdtEntry::makeEntry(isr20, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[21] = IdtEntry::makeEntry(isr21, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[22] = IdtEntry::makeEntry(isr22, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[23] = IdtEntry::makeEntry(isr23, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[24] = IdtEntry::makeEntry(isr24, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[25] = IdtEntry::makeEntry(isr25, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[26] = IdtEntry::makeEntry(isr26, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[27] = IdtEntry::makeEntry(isr27, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[28] = IdtEntry::makeEntry(isr28, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[29] = IdtEntry::makeEntry(isr29, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[30] = IdtEntry::makeEntry(isr30, 0x8E, PrivilegeLevel::Ring0);
-  idt_entries[31] = IdtEntry::makeEntry(isr31, 0x8E, PrivilegeLevel::Ring0);
+  for(uint32_t i = 0; i < isr_handlers_count; i++) {
+    idt_entries[i] = IdtEntry::makeEntry(isr_handlers[i], 0x08, PrivilegeLevel::Ring0);
+  }
 
   idt_ptr = IdtPointer::makePointer(idt_entries);
 

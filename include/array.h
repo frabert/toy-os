@@ -1,6 +1,6 @@
 #pragma once
 #include <stddef.h>
-#include <assert.h>
+#include <kassert.h>
 
 namespace os {
   namespace std {

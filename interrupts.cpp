@@ -2,19 +2,21 @@
 
 #include "screen.h"
 #include "ports.h"
+#include <array.h>
+#include <kassert.h>
 
 using namespace os::Interrupts;
 using os::Screen;
 
-InterruptServiceRoutine* interrupt_handlers[256];
+os::std::array<InterruptServiceRoutine*, 256> interrupt_handlers;
 
-void os::Interrupts::register_interrupt_handler(uint8_t n, InterruptServiceRoutine* handler)
+void os::Interrupts::registerInterruptHandler(uint8_t n, InterruptServiceRoutine* handler)
 {
   interrupt_handlers[n] = handler;
 }
 
 extern "C" void isr_handler(Registers regs) {
-  auto handler = interrupt_handlers[regs.int_no];
+  auto handler = interrupt_handlers.at(regs.int_no);
 
   if(handler != nullptr) {
     interrupt_handlers[regs.int_no](regs);

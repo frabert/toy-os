@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include "ports.h"
-#include "utils.h"
+#include <string.h>
 
 using namespace os;
 

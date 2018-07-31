@@ -16,7 +16,7 @@ SECTIONS
   .data :
   {
     start_ctors = .; _start_ctors = .; __start_ctors = .;
-    *(.ctors);
+    *(.ctors)
     end_ctors = .; _end_ctors = .; __end_ctors = .; 
 
      data = .; _data = .; __data = .;
@@ -30,6 +30,10 @@ SECTIONS
     bss = .; _bss = .; __bss = .;
     *(.bss)
     . = ALIGN(4096);
+    __stack_size = 4k;
+    stack_start = .; _stack_start = .; __stack_start = .;
+    . = . + __stack_size;
+    stack_end = .; _stack_end = .; __stack_end = .;
   }
 
   end = .; _end = .; __end = .;

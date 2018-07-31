@@ -1,6 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
-#include "kassert.h"
+#include <kassert.h>
 
 void *__dso_handle;
 void *__gxx_personality_v0;
@@ -17,7 +17,7 @@ extern "C" void __cxa_atexit(void (*f)(void *), void *p, void *d)
 /// Called by G++ if a pure virtual function is called. Bad Thing, should never happen!
 extern "C" void __cxa_pure_virtual()
 {
-  KPANIC("Pure virtual function call made", "");
+  panic("Pure virtual function call made");
 }
 
 /// Called by G++ if function local statics are initialised for the first time

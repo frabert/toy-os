@@ -4,15 +4,29 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "clean",
+      "type":"shell",
+      "command":"make clean"
+    },
+    {
       "label": "build",
       "type": "shell",
-      "command": "make clean && make kernel.iso"
+      "dependsOn": ["clean"],
+      "command": "make kernel.iso"
+    },
+    {
+      "label": "run",
+      "dependsOn": ["build"],
+      "type": "shell",
+      "command": "make run"
     },
 
     {
-      "label": "run",
+      "label": "debug",
+      "dependsOn": ["build"],
       "type": "shell",
-      "command": "make run"
+      "command": "make debug",
+      "isBackground": true
     }
   ]
 }

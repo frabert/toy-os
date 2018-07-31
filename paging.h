@@ -1,47 +1,50 @@
 #pragma once
 
 #include <stdint.h>
+#include <array.h>
+#include <pair.h>
+#include "multiboot.h"
 
 namespace os {
   namespace Paging {
-    struct Page {
-      uint32_t present    : 1;   // Page present in memory
-      uint32_t rw         : 1;   // Read-only if clear, readwrite if set
-      uint32_t user       : 1;   // Supervisor level only if clear
-      uint32_t accessed   : 1;   // Has the page been accessed since last refresh?
-      uint32_t dirty      : 1;   // Has the page been written to since last refresh?
-      uint32_t unused     : 7;   // Amalgamation of unused and reserved bits
-      uint32_t frame      : 20;  // Frame address (shifted right 12 bits)
+    struct PageDirectoryEntry {
+      uint32_t present       : 1;
+      uint32_t rw            : 1;
+      uint32_t user          : 1;
+      uint32_t writeThrough  : 1;
+      uint32_t cacheDisabled : 1;
+      uint32_t accessed      : 1;
+      uint32_t ignore        : 1;
+      uint32_t size          : 1;
+      uint32_t unused        : 4;
+      uint32_t addr          : 20;
     };
 
-    struct PageTable {
-      Page pages[1024];
+    struct PageTableEntry {
+      uint32_t present       : 1;
+      uint32_t rw            : 1;
+      uint32_t user          : 1;
+      uint32_t writeThrough  : 1;
+      uint32_t cacheDisabled : 1;
+      uint32_t accessed      : 1;
+      uint32_t dirty         : 1;
+      uint32_t zero          : 1;
+      uint32_t global        : 1;
+      uint32_t unused        : 3;
+      uint32_t addr          : 20;
     };
 
-    struct PageDirectory {
-      /**
-      Array of pointers to pagetables.
-      **/
-      PageTable *tables[1024];
-      /**
-         Array of pointers to the pagetables above, but gives their *physical*
-         location, for loading into the CR3 register.
-      **/
-      uintptr_t tablesPhysical[1024];
-      /**
-         The physical address of tablesPhysical. This comes into play
-         when we get our kernel heap allocated and the directory
-         may be in a different location in virtual memory.
-      **/
-      uintptr_t physicalAddr;
-    };
+    using PageDirectory = std::array<PageDirectoryEntry, 1024>;
+    using PageTable = std::array<PageTableEntry, 1024>;
 
-    void init();
+    void init(multiboot_memory_map_t* map, size_t mapLength);
 
-    void switch_page_directory(PageDirectory *page);
+    void identity_map(uintptr_t start, uintptr_t end, bool rw = true, bool user = false);
 
-    Page *get_page(uintptr_t address, bool make, PageDirectory *dir);
-    void alloc_frame(Page* page, bool is_kernel, bool is_writeable);
-    void free_frame(Page *page);
+    std::pair<uintptr_t, bool> translate(uintptr_t virtAddr);
+    inline std::pair<void*, bool> translate(void* virtAddr) {
+      auto p = translate((uintptr_t)virtAddr);
+      return {(void*)p.first, p.second};
+    }
   }
 }
