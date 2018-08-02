@@ -96,11 +96,9 @@ void os::Tasking::switchTasks(os::Interrupts::Registers* regs) {
   Task* next_task = queue.dequeue();
   if(next_task == nullptr) return;
 
-  /*regs->useresp = next_task->state.useresp;
+  regs->useresp = next_task->state.useresp;
   regs->ebp = next_task->state.ebp;
   regs->eip = next_task->state.eip;
-  current_task = next_task;*/
-  //os::Paging::switchDirectory(next_task->directory);
-
-  //switch_context(&next_task->state, next_task->directory);
+  current_task = next_task;
+  os::Paging::switchDirectory(next_task->directory);
 }
