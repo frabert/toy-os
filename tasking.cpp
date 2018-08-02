@@ -85,8 +85,6 @@ void os::Tasking::Thread::start() {
   queue.enqueue(task);
 }
 
-extern "C" uint32_t switch_context(os::Interrupts::Registers* regs, os::Paging::PageDirectory* dir);
-
 void os::Tasking::switchTasks(os::Interrupts::Registers* regs) {
   if(current_task != nullptr) {
     current_task->state = *regs;
