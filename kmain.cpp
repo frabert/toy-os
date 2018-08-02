@@ -7,8 +7,14 @@
 #include <stddef.h>
 #include <kassert.h>
 #include <stdlib.h>
+#include "tasking.h"
 
 using os::Screen;
+
+static int a = 0;
+static int* ptr;
+
+static void func(void);
 
 extern "C" int kmain(multiboot_info_t *mboot_ptr) {
   assert(mboot_ptr->flags & (1 << 5));
@@ -38,14 +44,10 @@ extern "C" int kmain(multiboot_info_t *mboot_ptr) {
 
   int* a = (int*)malloc(sizeof(int) * 64);
   int* b = (int*)os::Paging::translate(a).first;
+  ptr = a;
   screen.write("a: %\n", a);
   for(int i = 0; i < 64; i++) {
     a[i] = i;
-  }
- 
-  for(int i = 0; i < 64; i++) {
-    screen.write("a[%] = %\n", i, a[i]);
-    screen.write("b[%] = %\n", i, b[i]);
   }
 
   int* c = (int*)malloc(sizeof(int));
@@ -54,6 +56,21 @@ extern "C" int kmain(multiboot_info_t *mboot_ptr) {
   int* e = (int*)malloc(sizeof(int));
   screen.write("c: %\nd: %\ne: %\n", c, d, e);
 
+  screen.write("Physical memory size: %KB \nFree memory: %KB\n",
+    os::Paging::getHeapSize() >> 10,
+    os::Paging::getFreeHeap() >> 10);
+
+  os::Tasking::Thread(&func).start();
   while(true) {;}
   return 0;
+}
+
+void func() {
+  os::Screen::getInstance().write("Hello, world!\n");
+  a++;
+  if(a < 10) {
+    //func();
+    os::Tasking::Thread(func).start();
+    //while(true) {;}
+  }
 }

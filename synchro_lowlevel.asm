@@ -1,6 +1,6 @@
 [GLOBAL spinlock_acquire]
 spinlock_acquire:
-  mov edx, [esp + 4]
+  mov edx, [esp + 4] ; EDX now containes the address of the spinlock variable
 
   .spin:
   pause

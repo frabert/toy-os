@@ -2,9 +2,9 @@ include toolchain.mk
 
 .PHONY: clean run debug
 
-SOURCES	= kmain.o boot.o screen.o utils.o descriptor_tables.o gdt.o idt.o \
-				 interrupts.o debug.o paging.o icxxabi.o kheap.o assert.o timer.o \
-				 reflection.o liballoc.o synchro.o
+SOURCES	=	kmain.o boot.o screen.o utils.o descriptor_tables.o gdt.o idt.o \
+					interrupts.o debug.o paging.o icxxabi.o kheap.o assert.o timer.o \
+					reflection.o liballoc.o synchro.o synchro_lowlevel.o tasking.o
 
 %.o: %.asm
 	$(NASM) $(NASMFLAGS) $<

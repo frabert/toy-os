@@ -15,6 +15,7 @@ void debug_break() {
   outw(0x8A00, 0x08AE0);
 }
 
+// From https://wiki.osdev.org/Stack_Trace
 void debug_stacktrace(unsigned int MaxFrames) {
   // Stack contains:
   //  Second function argument
@@ -32,6 +33,6 @@ void debug_stacktrace(unsigned int MaxFrames) {
     ebp = reinterpret_cast<unsigned int *>(ebp[0]);
     unsigned int * arguments = &ebp[2];
     auto names = os::Reflection::getSymbolName(eip);
-    os::Screen::getInstance().write("  % (%)\n", (void*)eip, names.first);
+    os::Screen::getInstance().write("  % (% + %)\n", (void*)eip, names.first, (void*)names.second);
   }
 }

@@ -3,13 +3,11 @@
 #include "ports.h"
 #include "screen.h"
 #include "debug.h"
-
-static void timer_callback(os::Interrupts::Registers* regs) {
-}
+#include "tasking.h"
 
 void os::Timer::init(uint32_t frequency) {
   // Firstly, register our timer callback.
-  registerInterruptHandler(os::Interrupts::IRQ0, timer_callback);
+  registerInterruptHandler(os::Interrupts::IRQ0, &os::Tasking::switchTasks);
 
   // The value we send to the PIT is the value to divide it's input clock
   // (1193180 Hz) by, to get our required frequency. Important to note is

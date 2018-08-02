@@ -37,14 +37,47 @@ namespace os {
     using PageDirectory = std::array<PageDirectoryEntry, 1024>;
     using PageTable = std::array<PageTableEntry, 1024>;
 
+    /**
+     * \brief Initializes paging
+     * 
+     * \param map GRUB's memory map
+     * \param mapLength Memory map length
+     */
     void init(multiboot_memory_map_t* map, size_t mapLength);
-
-    void identity_map(uintptr_t start, uintptr_t end, bool rw = true, bool user = false);
 
     std::pair<uintptr_t, bool> translate(uintptr_t virtAddr);
     inline std::pair<void*, bool> translate(void* virtAddr) {
       auto p = translate((uintptr_t)virtAddr);
       return {(void*)p.first, p.second};
     }
+
+    /**
+     * \brief Returns the number of bytes found in the map
+     */
+    size_t getHeapSize();
+
+    /**
+     * \brief Returns the number of bytes in the map that are not allocated yet
+     */
+    size_t getFreeHeap();
+
+    /**
+     * \brief Changes the current page directory
+     * 
+     * \param dir 
+     */
+    void switchDirectory(PageDirectory* dir);
+
+    /**
+     * \brief Allocates a page for the stack of a new thread
+     * 
+     * \return A pair of the new directory and a pointer to the beginning of the stack 
+     */
+    std::pair<PageDirectory*, uintptr_t> makeThread();
+
+    /**
+     * \brief Whether the heap is active or not
+     */
+    bool heapActive();
   }
 }

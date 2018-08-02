@@ -1,12 +1,11 @@
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void spinlock_acquire(volatile int* spinlock);
-void spinlock_release(volatile int* spinlock);
-
-#ifdef __cplusplus
-}
-#endif
+namespace os {
+  class Spinlock {
+  public:
+    void acquire();
+    void release();
+  private:
+    volatile int m_val = 0;
+  };
+};

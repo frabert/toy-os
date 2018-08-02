@@ -22,6 +22,7 @@ extern "C" void isr_handler(Registers* regs) {
     interrupt_handlers[regs->int_no](regs);
   } else {
     Screen::getInstance().write("\nUnhandled interrupt %\n", regs->int_no);
+    while(true) {}
   }
 }
 

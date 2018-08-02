@@ -36,5 +36,15 @@
     "algorithm": "cpp",
     "new": "cpp",
     "deque": "cpp"
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/*.o": true,
+    "**/*.a": true,
+    "**/*.iso": true
   }
 }

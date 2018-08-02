@@ -105,8 +105,8 @@ uintptr_t os::Reflection::getKernelStart() {
   return kernelStart;
 }
 
-os::std::pair<const char*, const char*> os::Reflection::getSymbolName(uintptr_t addr) {
-  if(strtab_hdr == nullptr) return {"", ""};
+os::std::pair<const char*, size_t> os::Reflection::getSymbolName(uintptr_t addr) {
+  if(strtab_hdr == nullptr) return {"", 0};
 
   uintptr_t actual_addr = 0;
   size_t idx = -1;
@@ -120,12 +120,12 @@ os::std::pair<const char*, const char*> os::Reflection::getSymbolName(uintptr_t 
   }
 
   if(idx == -1)
-    return {"", ""};
+    return {"", 0};
 
   Elf32_Sym sym = symtab[idx];
   const char* name = &strtab[sym.st_name];
 
   const char* sectionName = &shstrtab[headers[sym.st_shndx].sh_name];
   
-  return {name, sectionName};
+  return {name, addr - sym.st_value};
 }
