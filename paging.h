@@ -34,7 +34,7 @@ namespace os {
       uint32_t addr          : 20;
     };
 
-    using PageDirectory = std::array<PageDirectoryEntry, 1024>;
+    struct PageDirectory;
     using PageTable = std::array<PageTableEntry, 1024>;
 
     /**
@@ -67,6 +67,8 @@ namespace os {
      * \param dir 
      */
     void switchDirectory(PageDirectory* dir);
+
+    void switchDirectory();
 
     /**
      * \brief Allocates a page for the stack of a new thread

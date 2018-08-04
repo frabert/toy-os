@@ -12,7 +12,7 @@ namespace os {
     bitset(size_t size) 
         : m_alloc(Allocator())
         , m_size(size)
-        , m_numValues(size / (sizeof(T) * 8))
+        , m_numValues((size - 1) / (sizeof(T) * 8) + 1)
         , m_freeSlots(m_size)
         , m_values(m_alloc.allocate(m_numValues)) {
       for(size_t i = 0; i < m_numValues; i++) {

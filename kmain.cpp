@@ -15,6 +15,7 @@ static int a = 0;
 static int* ptr;
 
 static void func(void);
+static void func2(void);
 
 extern "C" int kmain(multiboot_info_t *mboot_ptr) {
   assert(mboot_ptr->flags & (1 << 5));
@@ -61,16 +62,30 @@ extern "C" int kmain(multiboot_info_t *mboot_ptr) {
     os::Paging::getFreeHeap() >> 10);
 
   os::Tasking::Thread(&func).start();
+  os::Tasking::Thread(&func2).start();
+    for(size_t i = 0; i < 0xFFFFFF; i++) {
+
+    }
+  screen.write("foobar");
   while(true) {;}
   return 0;
 }
 
 void func() {
-  os::Screen::getInstance().write("Hello, world!\n");
-  a++;
-  if(a < 10) {
-    //func();
-    os::Tasking::Thread(func).start();
-    //while(true) {;}
+  while(true) {
+    os::Screen::getInstance().write("foo\n");
+    for(size_t i = 0; i < 0xFFFFFFF; i++) {
+
+    }
+  }
+}
+
+
+void func2() {
+  while(true) {
+    os::Screen::getInstance().write("bar!\n");
+    for(size_t i = 0; i < 0xFFFFFF1; i++) {
+
+    }
   }
 }

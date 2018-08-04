@@ -9,10 +9,29 @@
 #include <bitset.h>
 #include "reflection.h"
 #include "screen.h"
-#include "liballoc.h"
 #include "synchro.h"
 
 using namespace os::Paging;
+
+struct os::Paging::PageDirectory {
+  std::array<PageDirectoryEntry, 1024> entries;
+
+  PageDirectoryEntry& operator[](size_t idx) {
+    return entries[idx];
+  }
+
+  const PageDirectoryEntry& operator[](size_t idx) const {
+    return entries[idx];
+  }
+
+  PageTable& getTable(size_t idx) {
+    assert(idx < 1024);
+    assert(entries[idx].present);
+
+    uintptr_t addr = entries[idx].addr << 12;
+    return *((PageTable*)addr);
+  }
+};
 
 static PageDirectory* kernel_directory;
 static PageDirectory* current_directory;
@@ -20,17 +39,13 @@ static PageDirectory* current_directory;
 // Phyisical memory bitmap
 static os::bitset<>* memoryMap;
 
-// Virtual memory bitmap
-static os::bitset<>* vmemoryMap;
-constexpr static uintptr_t vmemStart = 0xFF000000;
-
 static uintptr_t heapStart;
 static size_t heapSize = 0;
 
 static os::Spinlock spinlock;
 
 bool os::Paging::heapActive() {
-  return memoryMap != nullptr && vmemoryMap != nullptr;
+  return memoryMap != nullptr && current_directory != nullptr;
 }
 
 static void pageFaultHandler(os::Interrupts::Registers* regs) {
@@ -46,12 +61,12 @@ static void pageFaultHandler(os::Interrupts::Registers* regs) {
   uint32_t pde = (faulting_address & 0xFFC00000) >> 22;
   uint32_t pte = (faulting_address & 0x003FF000) >> 12;
   
-  os::Screen::getInstance().write("Page fault (% % % %) at %\n",
+  os::Screen::getInstance().write("Page fault (% % % %) at % from %\n",
     present ? "present" : "",
     rw ? "readonly" : "",
     us ? "usermode" : "",
     reserved ? "reserved" : "",
-    (void*)faulting_address);
+    (void*)faulting_address, (void*)regs->eip);
   while(true) {}
 }
 
@@ -69,6 +84,12 @@ static void enablePaging() {
 
 void os::Paging::switchDirectory(PageDirectory* dir) {
   loadPageDirectory(dir);
+  current_directory = dir;
+}
+
+void os::Paging::switchDirectory() {
+  loadPageDirectory(kernel_directory);
+  current_directory = kernel_directory;
 }
 
 // This function should not be used once the heap is working
@@ -110,7 +131,7 @@ static void identity_map(uintptr_t start, uintptr_t end, bool rw = true, bool us
 
 void os::Paging::init(multiboot_memory_map_t* map, size_t mapLength) {
   kernel_directory = (PageDirectory*)kmalloc_align(sizeof(*kernel_directory));
-  kernel_directory->fill({0});
+  memset(kernel_directory, 0, sizeof(PageDirectory));
   current_directory = kernel_directory;
 
   // Identity-map all the memory from GRUB, also search for the largest chunk
@@ -149,8 +170,7 @@ void os::Paging::init(multiboot_memory_map_t* map, size_t mapLength) {
     heapSize -= (heapStart - tmp);
   }
 
-  memoryMap = new os::bitset<>(heapSize / 0x1000);
-  vmemoryMap = new os::bitset<>(heapSize / 0x1000);
+  memoryMap = new os::bitset<>((heapSize - 1) / 0x1000 + 1);
 
   os::Interrupts::registerInterruptHandler(14, pageFaultHandler);
 
@@ -159,33 +179,26 @@ void os::Paging::init(multiboot_memory_map_t* map, size_t mapLength) {
 }
 
 os::std::pair<uintptr_t, bool> os::Paging::translate(uintptr_t virtAddr) {
-  assert(kernel_directory != nullptr);
-  uint32_t pde = (virtAddr & 0xFFC00000) >> 22;
-  uint32_t pte = (virtAddr & 0x003FF000) >> 12;
+  assert(current_directory != nullptr);
+  uint32_t pde_idx = (virtAddr & 0xFFC00000) >> 22;
+  uint32_t pte_idx = (virtAddr & 0x003FF000) >> 12;
   uint32_t offs = virtAddr & 0x00000FFF;
 
-  auto& dir = *kernel_directory;
-  if(dir[pde].present) {
-    auto& table = *((PageTable*)(dir[pde].addr * 0x1000));
-    if(table[pte].present) {
-      return {(table[pte].addr * 0x1000) | offs, true};
+  auto& dir = *current_directory;
+  auto& pde = dir[pde_idx];
+  if(pde.present) {
+    auto& table = *((PageTable*)(pde.addr * 0x1000));
+    auto& pte = table[pte_idx];
+    if(pte.present) {
+      return {(pte.addr * 0x1000) | offs, true};
     }
   }
   return {0, false};
 }
 
-int liballoc_lock() {
-  spinlock.acquire();
-  return 0;
-}
-
-int liballoc_unlock() {
-  spinlock.release();
-  return 0;
-}
-
 static uintptr_t allocPage() {
   size_t frame = memoryMap->firstFree();
+  if(frame == (size_t)-1) return 0;
   memoryMap->set(frame);
 
   return (uintptr_t)(heapStart + frame * 0x1000);
@@ -196,7 +209,7 @@ static void freePage(uintptr_t page) {
   memoryMap->unset(frame);
 }
 
-static PageDirectory* allocDirectory() {
+static PageDirectory* allocDirectory(size_t heapPages) {
   PageDirectory* dir = (PageDirectory*)allocPage();
   memset(dir, 0, sizeof(PageDirectory));
   return dir;
@@ -216,72 +229,59 @@ static void freeTable(PageTable* table) {
   freePage((uintptr_t)table);
 }
 
-void* liballoc_alloc(int n) {
-  assert(kernel_directory != nullptr);
-  size_t vframeStart = vmemoryMap->freeSpan(n);
+struct HeapHeader {
+  uint32_t magic;
+  size_t chunkSize;
 
-  auto& dir = *kernel_directory;
+  static constexpr uint32_t magic_value = 0xDEADBEEF;
+};
 
-  for(int i = 0; i < n; i++) {
-    vmemoryMap->set(vframeStart + i);
-    uintptr_t virtAddr = vmemStart + (vframeStart + i) * 0x1000;
-    size_t pde_idx = (virtAddr & 0xFFC00000) >> 22;
-    size_t pte_idx = (virtAddr & 0x003FF000) >> 12;
-
-    auto& pde = dir[pde_idx];
-    PageTable* table_ptr = nullptr;
-    if(!pde.present) {
-      pde.present = 1;
-      pde.rw = 1;
-      table_ptr = allocTable();
-      pde.addr = (uintptr_t)table_ptr >> 12;
-    } else {
-      table_ptr = (PageTable*)(pde.addr << 12);
-    }
-
-    auto& table = *table_ptr;
-    if(!table[pte_idx].present) {
-      auto& pte = table[pte_idx];
-      pte.present = 1;
-      pte.rw = 1;
-      uintptr_t page = allocPage();
-      pte.addr = page >> 12;
-    }
+void *malloc(size_t s) {
+  size_t neededMemory = s + sizeof(HeapHeader);
+  size_t numPages = (neededMemory - 1) / 0x1000 + 1;
+  size_t addrSlot = memoryMap->freeSpan(numPages);
+  if(addrSlot == (size_t)-1) return nullptr;
+  for(size_t i = 0; i < numPages; i++) {
+    memoryMap->set(addrSlot + i);
   }
 
-  loadPageDirectory(kernel_directory);
-  uintptr_t res = vmemStart + vframeStart * 0x1000;
-  return (void*)res;
+  uintptr_t addrStart = heapStart + (addrSlot << 12);
+
+  void* actualStart = (void*)(addrStart + sizeof(HeapHeader));
+
+  auto& dir = *current_directory;
+
+  HeapHeader* header = (HeapHeader*)addrStart;
+  header->chunkSize = s;
+  header->magic = HeapHeader::magic_value;
+
+  return actualStart;
 }
 
-int liballoc_free(void* addr, int n) {
-  assert(kernel_directory != nullptr);
-  uintptr_t vframeStart = ((uintptr_t)addr - vmemStart) / 0x1000;
+void *calloc(size_t n, size_t s) {
+  void* addr = malloc(n * s);
+  memset(addr, 0, n * s);
+}
 
-  auto& dir = *kernel_directory;
+void *realloc(void *ptr, size_t s) {
+  panic("Not implemented");
+  return ptr;
+}
 
-  for(int i = 0; i < n; i++) {
-    vmemoryMap->unset(vframeStart + i);
-    uintptr_t virtAddr = (uintptr_t)addr + i * 0x1000;
-    size_t pde_idx = (virtAddr & 0xFFC00000) >> 22;
-    size_t pte_idx = (virtAddr & 0x003FF000) >> 12;
+void free(void* ptr) {
+  uintptr_t addr = (uintptr_t)ptr;
+  size_t pageNum = (addr - heapStart) >> 12;
 
-    auto& pde = dir[pde_idx];
-    PageTable* table_ptr = nullptr;
-    if(pde.present) {
-      table_ptr = (PageTable*)(pde.addr << 12);
+  uintptr_t pageAddr = heapStart + (pageNum << 12);
+  HeapHeader* hdr = (HeapHeader*)pageAddr;
+  assert(hdr->magic == HeapHeader::magic_value);
+  size_t numPagesToFree = ((hdr->chunkSize + sizeof(HeapHeader)) - 1) / 0x1000 + 1;
 
-      auto& table = *table_ptr;
-      if(table[pte_idx].present) {
-        auto& pte = table[pte_idx];
-        pte.present = 0;
-        pte.rw = 0;
-        freePage(pte.addr << 12);
-      }
-    }
+  auto& dir = *current_directory;
+
+  for(size_t i = 0; i < numPagesToFree; i++) {
+    memoryMap->unset(pageNum + i);
   }
-
-  loadPageDirectory(current_directory);
 }
 
 size_t os::Paging::getHeapSize() {
@@ -292,12 +292,34 @@ size_t os::Paging::getFreeHeap() {
   return memoryMap->free_slots() * 0x1000;
 }
 
+static PageTable* cloneTable(PageTable* orig) {
+  PageTable* res = allocTable();
+  memcpy(res, orig, sizeof(PageTable));
+  return res;
+}
+
+static PageDirectory* cloneDirectory(PageDirectory& dir, size_t heapPages) {
+  PageDirectory* clone_ptr = allocDirectory(heapPages);
+
+  auto& clone = *clone_ptr;
+  for(int i = 0; i < 1024; i++) {
+    if(dir[i].present) {
+      clone[i] = dir[i];
+      PageTable* tbl = (PageTable*)(dir[i].addr << 12);
+      clone[i].addr = (uintptr_t)cloneTable(tbl) >> 12;
+    }
+  }
+
+  return clone_ptr;
+}
+
 os::std::pair<PageDirectory*, uintptr_t> os::Paging::makeThread() {
   spinlock.acquire();
   uintptr_t stackPage = allocPage();
+  memset((void*)stackPage, 0, 0x1000);
 
   PageTable* stackTable = allocTable();
-  PageDirectory* dir = allocDirectory();
+  PageDirectory* dir = cloneDirectory(*kernel_directory, 1024);
   spinlock.release();
 
   auto& lastTableEntry = (*stackTable)[1023];
@@ -309,13 +331,6 @@ os::std::pair<PageDirectory*, uintptr_t> os::Paging::makeThread() {
   lastDirEntry.addr = (uintptr_t)stackTable / 0x1000;
   lastDirEntry.present = 1;
   lastDirEntry.rw = 1;
-  
-  for(size_t i = 0; i < 1024; i++) {
-    auto pde = (*kernel_directory)[i];
-    if(pde.present) {
-      (*dir)[i] = (*kernel_directory)[i];
-    }
-  }
 
-  return {dir, 0xFFFFF00};
+  return {dir, 0xFFFFFFFF};
 }
