@@ -119,13 +119,11 @@ os::std::pair<const char*, size_t> os::Reflection::getSymbolName(uintptr_t addr)
     }
   }
 
-  if(idx == -1)
+  if(idx == (size_t)-1)
     return {"", 0};
 
   Elf32_Sym sym = symtab[idx];
   const char* name = &strtab[sym.st_name];
-
-  const char* sectionName = &shstrtab[headers[sym.st_shndx].sh_name];
   
   return {name, addr - sym.st_value};
 }

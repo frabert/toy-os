@@ -31,7 +31,7 @@ void debug_stacktrace(unsigned int MaxFrames) {
         break;
     // Unwind to previous stack frame
     ebp = reinterpret_cast<unsigned int *>(ebp[0]);
-    unsigned int * arguments = &ebp[2];
+    //unsigned int * arguments = &ebp[2];
     auto names = os::Reflection::getSymbolName(eip);
     os::Screen::getInstance().write("  % (% + %)\n", (void*)eip, names.first, (void*)names.second);
   }

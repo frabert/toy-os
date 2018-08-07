@@ -8,4 +8,4 @@ namespace os {
   private:
     volatile int m_val = 0;
   };
-};
+}

@@ -131,11 +131,11 @@ struct IdtEntry {
     uint8_t lev = static_cast<uint8_t>(level) << 5;
 
     return {
-      addr & 0xFFFF,
+      (uint16_t)(addr & 0xFFFF),
       selector,
       0,
-      lev | 0x8E,
-      (addr >> 16) & 0xFFFF
+      (uint8_t)(lev | 0x8E),
+      (uint16_t)((addr >> 16) & 0xFFFF)
     };
   }
 };
@@ -170,7 +170,7 @@ IdtPointer idt_ptr;
 
 static void init_gdt()
 {
-  gdt_entries[0] = {0};
+  gdt_entries[0] = {};
   gdt_entries[1] = GdtEntry::makeCodeSegment(0, 0xFFFFFFFF, PrivilegeLevel::Ring0, ReadEnable::ReadExecute);
   gdt_entries[2] = GdtEntry::makeDataSegment(0, 0xFFFFFFFF, PrivilegeLevel::Ring0, DataAccess::ReadWrite);
   gdt_entries[3] = GdtEntry::makeCodeSegment(0, 0xFFFFFFFF, PrivilegeLevel::Ring3, ReadEnable::ReadExecute);

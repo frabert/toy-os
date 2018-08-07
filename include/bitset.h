@@ -99,4 +99,4 @@ namespace os {
     size_t m_freeSlots;
     T* m_values;
   };
-};
+}

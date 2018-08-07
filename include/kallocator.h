@@ -12,6 +12,7 @@ namespace os {
       if(n > (size_t)-1 / sizeof(T)) panic("Bad allocation");
       if(auto p = static_cast<T*>(kmalloc(n*sizeof(T)))) return p;
       panic("Bad allocation");
+      return nullptr;
     }
     void deallocate(T* p, size_t) noexcept { kfree(p); }
   };

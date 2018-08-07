@@ -59,12 +59,12 @@ void operator delete[](void *p)
   kfree(p);
 }
  
-void operator delete(void *p, size_t s)
+void operator delete(void *p, size_t)
 {
   kfree(p);
 }
  
-void operator delete[](void *p, size_t s)
+void operator delete[](void *p, size_t)
 {
   kfree(p);
 }

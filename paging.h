@@ -70,12 +70,20 @@ namespace os {
 
     void switchDirectory();
 
+    PageDirectory* currentDirectory();
+
+    struct ThreadData {
+      PageDirectory* directory;
+      uintptr_t virtualStackStart;
+      uintptr_t physicalStackStart;
+    };
+
     /**
      * \brief Allocates a page for the stack of a new thread
      * 
      * \return A pair of the new directory and a pointer to the beginning of the stack 
      */
-    std::pair<PageDirectory*, uintptr_t> makeThread();
+    ThreadData makeThread();
 
     /**
      * \brief Whether the heap is active or not

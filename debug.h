@@ -19,3 +19,5 @@ void debug_break();
  * \param MaxFrames The maximum number of frames to climb
  */
 void debug_stacktrace(unsigned int MaxFrames);
+
+#define MAGIC_BREAK asm volatile("xchgw %bx, %bx")

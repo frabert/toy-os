@@ -5,25 +5,33 @@
   "tasks": [
     {
       "label": "clean",
-      "type":"shell",
-      "command":"make clean"
+      "type": "shell",
+      "command": "make clean"
     },
     {
       "label": "build",
       "type": "shell",
-      "dependsOn": ["clean"],
-      "command": "make kernel.iso"
+      "dependsOn": [
+        "clean"
+      ],
+      "command": "make kernel.iso",
+      "problemMatcher": [
+        "$gcc"
+      ]
     },
     {
       "label": "run",
-      "dependsOn": ["build"],
+      "dependsOn": [
+        "build"
+      ],
       "type": "shell",
       "command": "make run"
     },
-
     {
       "label": "debug",
-      "dependsOn": ["build"],
+      "dependsOn": [
+        "build"
+      ],
       "type": "shell",
       "command": "make debug",
       "isBackground": true

@@ -2,32 +2,46 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "interrupts.h"
 
 namespace os {
-  namespace Tasking {
-    class Thread {
+  class Tasking {
+  public:
+    class Waitable {
     public:
       enum class State {
-        Stopped,
         Ready,
-        Running,
-        Waiting
+        Processing,
+        Failed
       };
 
-      using function_type = void(void);
+      void wait();
+      virtual State state() const = 0;
 
-      Thread(function_type* func)
-          : m_func(func)
-          , m_state(State::Stopped) { }
-
-      void start();
-
-    private:
-      function_type* m_func;
-      State m_state;
+      static Waitable* wait_all(Waitable** list, size_t n);
+      static Waitable* wait_one(Waitable** list, size_t n);
     };
 
-    void switchTasks(os::Interrupts::Registers* regs);
-  }
+    class Thread : public Waitable {
+      friend Tasking;
+    public:
+      using function_type = void(void);
+
+      static Thread* start(function_type* func);
+
+      State state() const;
+
+    protected:
+      State m_state;
+      function_type* m_func;
+    private:
+      Thread(function_type* func);
+    };
+
+    static void init();
+    static void switchTasks();
+
+  private:
+    static void task_end();
+    static void suspend_task();
+  };
 }

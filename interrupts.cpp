@@ -15,7 +15,8 @@ void os::Interrupts::registerInterruptHandler(uint8_t n, InterruptServiceRoutine
   interrupt_handlers[n] = handler;
 }
 
-extern "C" void isr_handler(Registers* regs) {
+extern "C" void isr_handler(Registers* regs);
+void isr_handler(Registers* regs) {
   auto handler = interrupt_handlers.at(regs->int_no);
 
   if(handler != nullptr) {
@@ -26,7 +27,8 @@ extern "C" void isr_handler(Registers* regs) {
   }
 }
 
-extern "C" void irq_handler(Registers* regs) {
+extern "C" void irq_handler(Registers* regs);
+void irq_handler(Registers* regs) {
   // Send an EOI (end of interrupt) signal to the PICs.
   // If this interrupt involved the slave.
   if (regs->int_no >= 40) {

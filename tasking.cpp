@@ -9,15 +9,18 @@
 
 #include "debug.h"
 
-using os::Tasking::Thread;
-static int maxid = 0;
+using os::Tasking;
+static uint32_t maxid = 1;
 
 struct Task {
-  int id;
-  Thread* thread;
-  os::Interrupts::Registers state;
-  os::Paging::PageDirectory* directory;
+  uint32_t id;
+  Tasking::Thread* thread;
+  os::Paging::ThreadData data;
+  uint32_t esp;
+  os::Tasking::Waitable* waiting;
 };
+
+extern "C" void task_switch(Task* current, Task* next);
 
 class TaskQueue {
 public:
@@ -82,47 +85,140 @@ private:
 static TaskQueue queue;
 static Task* current_task = nullptr;
 
-void ret() {
-  int a = 4;
-  a++;
+void Tasking::task_end() {
+  if(current_task->thread != nullptr) {
+    current_task->thread->m_state = Tasking::Waitable::State::Ready;
+  }
+  Task* next_task = queue.dequeue();
+  assert(next_task != nullptr);
+  while(next_task->waiting != nullptr &&
+      next_task->waiting->state() != Tasking::Waitable::State::Ready) {
+    queue.enqueue(next_task);
+    next_task = queue.dequeue();
+    assert(next_task != nullptr);
+  }
+  Task* old_task = current_task;
+  current_task = next_task;
+  task_switch(old_task, current_task);
 }
 
-void endTask() {
-  delete current_task;
-  current_task = nullptr;
+void Tasking::suspend_task() {
+  Task* next_task = queue.dequeue();
+  if(next_task == nullptr)
+    return;
+  while(next_task->waiting != nullptr &&
+      next_task->waiting->state() != Tasking::Waitable::State::Ready) {
+    queue.enqueue(next_task);
+    next_task = queue.dequeue();
+  }
+  Task* old_task = current_task;
+  current_task = next_task;
+  queue.enqueue(old_task);
+  task_switch(old_task, current_task);
 }
 
-void os::Tasking::Thread::start() {
-  m_state = State::Ready;
+Tasking::Waitable::State Tasking::Thread::state() const {
+  return m_state;
+}
+
+Tasking::Thread* Tasking::Thread::start(Tasking::Thread::function_type* func) {
+  return new Thread(func);
+}
+
+Tasking::Thread::Thread(os::Tasking::Thread::function_type* func) 
+    : m_state(os::Tasking::Waitable::State::Processing)
+    , m_func(func) {
   auto context = os::Paging::makeThread();
+  uint32_t* stack = (uint32_t*)context.physicalStackStart;
+  stack--;
+  *stack = (uintptr_t)&Tasking::task_end;
+  stack--;
+  *stack = (uintptr_t)m_func;
+  stack--;
+  *stack = 0; // ebx
+  stack--;
+  *stack = 0; // esi
+  stack--;
+  *stack = 0; // edi
+  stack--;
+  *stack = 0; // ebp
+
   Task* task = new Task();
-  task->state = {0};
   task->thread = this;
-  task->state.useresp = context.second;
-  task->state.pusha_registers.esp = context.second;
-  task->state.pusha_registers.ebp = 0;
-  task->state.eip = ((uintptr_t)m_func);
-  task->directory = context.first;
   task->id = maxid++;
+  task->data = context;
+  task->esp = context.virtualStackStart - 4 * 6;
+  task->waiting = nullptr;
 
   queue.enqueue(task);
 }
 
-void os::Tasking::switchTasks(os::Interrupts::Registers* regs) {
-  if(current_task != nullptr) {
-    current_task->state = *regs;
-    queue.enqueue(current_task);
+void Tasking::init() {
+  current_task = new Task();
+  current_task->id = 0;
+  current_task->data.directory = os::Paging::currentDirectory();
+  current_task->thread = nullptr;
+}
+
+void Tasking::Waitable::wait() {
+  current_task->waiting = this;
+  suspend_task();
+}
+
+class WaitAll : public Tasking::Waitable {
+public:
+  WaitAll(Tasking::Waitable** list, size_t n)
+    : m_list(list)
+    , m_num(n) {}
+
+  State state() const {
+    State res = State::Ready;
+    for(size_t i = 0; i < m_num; i++) {
+      if(m_list[i]->state() == State::Failed) {
+        return State::Failed;
+      } else if(m_list[i]->state() == State::Processing) {
+        res = State::Processing;
+      }
+    }
+    return res;
   }
 
-  Task* next_task = queue.dequeue();
-  if(next_task == nullptr)
-    return;
+private:
+  Tasking::Waitable** m_list;
+  size_t m_num;
+};
 
-  regs->useresp = next_task->state.useresp;
-  regs->pusha_registers = next_task->state.pusha_registers;
-  regs->pusha_registers.esp = next_task->state.useresp;
-  regs->eip = next_task->state.eip;
-  current_task = next_task;
-  os::Paging::switchDirectory(next_task->directory);
-  asm volatile("xchgw %bx, %bx");
+class WaitOne : public Tasking::Waitable {
+public:
+  WaitOne(Tasking::Waitable**list, size_t n)
+    : m_list(list)
+    , m_num(n) {}
+
+  State state() const {
+    State res = State::Failed;
+    for(size_t i = 0; i < m_num; i++) {
+      if(m_list[i]->state() == State::Ready) {
+        return State::Ready;
+      } else if(m_list[i]->state() == State::Processing) {
+        res = State::Processing;
+      }
+    }
+    return res;
+  }
+
+private:
+  Tasking::Waitable** m_list;
+  size_t m_num;
+};
+
+Tasking::Waitable* Tasking::Waitable::wait_all(Tasking::Waitable** list, size_t n) {
+  return new WaitAll(list, n);
+}
+
+Tasking::Waitable* Tasking::Waitable::wait_one(Tasking::Waitable** list, size_t n) {
+  return new WaitOne(list, n);
+}
+
+void Tasking::switchTasks() {
+  // TODO: Preemptive task switch
 }

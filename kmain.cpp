@@ -8,16 +8,18 @@
 #include <kassert.h>
 #include <stdlib.h>
 #include "tasking.h"
+#include "debug.h"
 
 using os::Screen;
 
-static int a = 0;
-static int* ptr;
-
 static void func(void);
 static void func2(void);
+static void func3(void);
+static void func4(void);
 
-extern "C" int kmain(multiboot_info_t *mboot_ptr) {
+extern "C" int kmain(multiboot_info_t*);
+
+int kmain(multiboot_info_t *mboot_ptr) {
   assert(mboot_ptr->flags & (1 << 5));
   os::Reflection::init(mboot_ptr->u.elf_sec);
 
@@ -43,49 +45,56 @@ extern "C" int kmain(multiboot_info_t *mboot_ptr) {
   os::Paging::init(mmap, mboot_ptr->mmap_length);
   screen.write("Paging initialized\n");
 
-  int* a = (int*)malloc(sizeof(int) * 64);
-  int* b = (int*)os::Paging::translate(a).first;
-  ptr = a;
-  screen.write("a: %\n", a);
-  for(int i = 0; i < 64; i++) {
-    a[i] = i;
-  }
-
-  int* c = (int*)malloc(sizeof(int));
-  int* d = (int*)malloc(sizeof(int));
-  free(c);
-  int* e = (int*)malloc(sizeof(int));
-  screen.write("c: %\nd: %\ne: %\n", c, d, e);
-
   screen.write("Physical memory size: %KB \nFree memory: %KB\n",
     os::Paging::getHeapSize() >> 10,
     os::Paging::getFreeHeap() >> 10);
 
-  os::Tasking::Thread(&func).start();
-  os::Tasking::Thread(&func2).start();
-    for(size_t i = 0; i < 0xFFFFFF; i++) {
+  os::Tasking::init();
+  os::Tasking::Thread* t1 = os::Tasking::Thread::start(&func);
+
+  os::Tasking::Thread* t2 = os::Tasking::Thread::start(&func3);
+  os::Tasking::Thread* t3 = os::Tasking::Thread::start(&func4);
+
+  os::std::array<os::Tasking::Waitable*, 2> ts;
+  ts[0] = t2;
+  ts[1] = t3;
+
+  auto t4 = os::Tasking::Waitable::wait_one(ts.data(), 2);
+  t4->wait();
+
+  while(true) {
+    os::Screen::getInstance().write("foobar!\n");
+    for(size_t i = 0; i < 0xFFFFFF1; i++) {
 
     }
-  screen.write("foobar");
-  while(true) {;}
+    t1->wait();
+  }
   return 0;
 }
 
 void func() {
-  while(true) {
-    os::Screen::getInstance().write("foo\n");
-    for(size_t i = 0; i < 0xFFFFFFF; i++) {
-
-    }
-  }
+  os::Tasking::Thread* t = os::Tasking::Thread::start(&func2);
+  os::Screen::getInstance().write("foo!\n");
+  t->wait();
+  for(size_t i = 0; i < 0xFFFFFFF; i++) { }
 }
 
 
 void func2() {
-  while(true) {
-    os::Screen::getInstance().write("bar!\n");
-    for(size_t i = 0; i < 0xFFFFFF1; i++) {
+  os::Screen::getInstance().write("bar!\n");
+  for(size_t i = 0; i < 0xFFFFFF1; i++) { }
+  os::Screen::getInstance().write("baz\n");
+}
 
-    }
-  }
+void func3() {
+  os::Screen::getInstance().write("barbaz fast!\n");
+  for(size_t i = 0; i < 0xFFFFFF1; i++) { }
+  for(size_t i = 0; i < 0xFFFFFF1; i++) { }
+}
+
+void func4() {
+  os::Screen::getInstance().write("barbaz slow!\n");
+  for(size_t i = 0; i < 0xFFFFFF1; i++) { }
+  for(size_t i = 0; i < 0xFFFFFF1; i++) { }
+  for(size_t i = 0; i < 0xFFFFFF1; i++) { }
 }

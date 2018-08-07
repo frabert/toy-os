@@ -35,7 +35,10 @@
     "utility": "cpp",
     "algorithm": "cpp",
     "new": "cpp",
-    "deque": "cpp"
+    "deque": "cpp",
+    "atomic": "cpp",
+    "memory": "cpp",
+    "cinttypes": "cpp"
   },
   "files.exclude": {
     "**/.git": true,

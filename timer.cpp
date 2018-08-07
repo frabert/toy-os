@@ -5,9 +5,15 @@
 #include "debug.h"
 #include "tasking.h"
 
+void timer_handler(os::Interrupts::Registers*);
+
+void timer_handler(os::Interrupts::Registers*) {
+  os::Tasking::switchTasks();
+}
+
 void os::Timer::init(uint32_t frequency) {
   // Firstly, register our timer callback.
-  registerInterruptHandler(os::Interrupts::IRQ0, &os::Tasking::switchTasks);
+  registerInterruptHandler(os::Interrupts::IRQ0, timer_handler);
 
   // The value we send to the PIT is the value to divide it's input clock
   // (1193180 Hz) by, to get our required frequency. Important to note is

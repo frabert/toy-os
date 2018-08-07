@@ -4,13 +4,22 @@ include toolchain.mk
 
 SOURCES	=	kmain.o boot.o screen.o utils.o descriptor_tables.o gdt.o idt.o \
 					interrupts.o debug.o paging.o icxxabi.o kheap.o assert.o timer.o \
-					reflection.o synchro.o synchro_lowlevel.o tasking.o
+					reflection.o synchro.o synchro_lowlevel.o tasking.o tasking_lowlevel.o
+
+%.o: %.c Makefile
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+%.o: %.cpp Makefile
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+%.o: %.cc Makefile
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
 %.o: %.asm
-	$(NASM) $(NASMFLAGS) $<
+	@$(NASM) $(NASMFLAGS) $<
 
 kernel: $(SOURCES)
-	$(LD) $(LDFLAGS) -o $@ $^
+	@$(LD) $(LDFLAGS) -o $@ $^
 
 kernel.iso: kernel
 	-rm -f image/boot/kernel

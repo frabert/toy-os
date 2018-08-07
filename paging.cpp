@@ -58,8 +58,8 @@ static void pageFaultHandler(os::Interrupts::Registers* regs) {
   int us = regs->err_code & 0x4;       // Processor was in user-mode?
   int reserved = regs->err_code & 0x8; // Overwritten CPU-reserved bits of page entry?
 
-  uint32_t pde = (faulting_address & 0xFFC00000) >> 22;
-  uint32_t pte = (faulting_address & 0x003FF000) >> 12;
+  //uint32_t pde = (faulting_address & 0xFFC00000) >> 22;
+  //uint32_t pte = (faulting_address & 0x003FF000) >> 12;
   
   os::Screen::getInstance().write("Page fault (% % % %) at % from %\n",
     present ? "present" : "",
@@ -101,7 +101,6 @@ static void identity_map(uintptr_t start, uintptr_t end, bool rw = true, bool us
   for(uintptr_t i = start; i < end; i += 0x1000) {
     uint32_t pde = (i & 0xFFC00000) >> 22;
     uint32_t pte = (i & 0x003FF000) >> 12;
-    uint32_t frame = i & 0x00000FFF;
 
     PageTable* table = nullptr;
 
@@ -155,8 +154,6 @@ void os::Paging::init(multiboot_memory_map_t* map, size_t mapLength) {
   // Make sure the kernel's code is read-only
   identity_map(Reflection::getKernelStart(), Reflection::getKernelEnd(), false);
 
-  auto& dir = *kernel_directory;
-
   // If the largest chunks contains part of the kernel, skip that part
   if(heapStart < Reflection::getKernelEnd()) {
     uintptr_t nextPage = Reflection::getKernelEnd();
@@ -209,7 +206,7 @@ static void freePage(uintptr_t page) {
   memoryMap->unset(frame);
 }
 
-static PageDirectory* allocDirectory(size_t heapPages) {
+static PageDirectory* allocDirectory() {
   PageDirectory* dir = (PageDirectory*)allocPage();
   memset(dir, 0, sizeof(PageDirectory));
   return dir;
@@ -237,6 +234,7 @@ struct HeapHeader {
 };
 
 void *malloc(size_t s) {
+  spinlock.acquire();
   size_t neededMemory = s + sizeof(HeapHeader);
   size_t numPages = (neededMemory - 1) / 0x1000 + 1;
   size_t addrSlot = memoryMap->freeSpan(numPages);
@@ -244,12 +242,11 @@ void *malloc(size_t s) {
   for(size_t i = 0; i < numPages; i++) {
     memoryMap->set(addrSlot + i);
   }
+  spinlock.release();
 
   uintptr_t addrStart = heapStart + (addrSlot << 12);
 
   void* actualStart = (void*)(addrStart + sizeof(HeapHeader));
-
-  auto& dir = *current_directory;
 
   HeapHeader* header = (HeapHeader*)addrStart;
   header->chunkSize = s;
@@ -263,7 +260,7 @@ void *calloc(size_t n, size_t s) {
   memset(addr, 0, n * s);
 }
 
-void *realloc(void *ptr, size_t s) {
+void *realloc(void *ptr, size_t) {
   panic("Not implemented");
   return ptr;
 }
@@ -277,11 +274,11 @@ void free(void* ptr) {
   assert(hdr->magic == HeapHeader::magic_value);
   size_t numPagesToFree = ((hdr->chunkSize + sizeof(HeapHeader)) - 1) / 0x1000 + 1;
 
-  auto& dir = *current_directory;
-
+  spinlock.acquire();
   for(size_t i = 0; i < numPagesToFree; i++) {
     memoryMap->unset(pageNum + i);
   }
+  spinlock.release();
 }
 
 size_t os::Paging::getHeapSize() {
@@ -289,7 +286,10 @@ size_t os::Paging::getHeapSize() {
 }
 
 size_t os::Paging::getFreeHeap() {
-  return memoryMap->free_slots() * 0x1000;
+  spinlock.acquire();
+  size_t v = memoryMap->free_slots() << 12;
+  spinlock.release();
+  return v;
 }
 
 static PageTable* cloneTable(PageTable* orig) {
@@ -298,8 +298,8 @@ static PageTable* cloneTable(PageTable* orig) {
   return res;
 }
 
-static PageDirectory* cloneDirectory(PageDirectory& dir, size_t heapPages) {
-  PageDirectory* clone_ptr = allocDirectory(heapPages);
+static PageDirectory* cloneDirectory(PageDirectory& dir) {
+  PageDirectory* clone_ptr = allocDirectory();
 
   auto& clone = *clone_ptr;
   for(int i = 0; i < 1024; i++) {
@@ -313,13 +313,13 @@ static PageDirectory* cloneDirectory(PageDirectory& dir, size_t heapPages) {
   return clone_ptr;
 }
 
-os::std::pair<PageDirectory*, uintptr_t> os::Paging::makeThread() {
+ThreadData os::Paging::makeThread() {
   spinlock.acquire();
   uintptr_t stackPage = allocPage();
   memset((void*)stackPage, 0, 0x1000);
 
   PageTable* stackTable = allocTable();
-  PageDirectory* dir = cloneDirectory(*kernel_directory, 1024);
+  PageDirectory* dir = cloneDirectory(*kernel_directory);
   spinlock.release();
 
   auto& lastTableEntry = (*stackTable)[1023];
@@ -332,5 +332,9 @@ os::std::pair<PageDirectory*, uintptr_t> os::Paging::makeThread() {
   lastDirEntry.present = 1;
   lastDirEntry.rw = 1;
 
-  return {dir, 0xFFFFFFFF};
+  return {dir, 0xFFFFFFFF, stackPage + 0xFFF};
+}
+
+PageDirectory* os::Paging::currentDirectory() {
+  return current_directory;
 }
