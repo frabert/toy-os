@@ -258,11 +258,55 @@ void *malloc(size_t s) {
 void *calloc(size_t n, size_t s) {
   void* addr = malloc(n * s);
   memset(addr, 0, n * s);
+  return addr;
 }
 
-void *realloc(void *ptr, size_t) {
-  panic("Not implemented");
-  return ptr;
+void *realloc(void *ptr, size_t s) {
+  if(s == 0) {
+    free(ptr);
+    return nullptr;
+  }
+
+  if(ptr == nullptr) {
+    return malloc(s);
+  }
+
+  uintptr_t addr = (uintptr_t)ptr;
+  size_t pageNum = (addr - heapStart) >> 12;
+
+  uintptr_t pageAddr = heapStart + (pageNum << 12);
+  HeapHeader* hdr = (HeapHeader*)pageAddr;
+  assert(hdr->magic == HeapHeader::magic_value);
+
+  size_t curNumPages = ((hdr->chunkSize + sizeof(HeapHeader)) - 1) / 0x1000 + 1;
+  size_t targetNumPages = ((s + sizeof(HeapHeader)) - 1) / 0x1000 + 1;
+
+  if(curNumPages > targetNumPages) {
+    os::scoped_lock l(spinlock);
+    size_t to_dealloc = curNumPages - targetNumPages;
+    size_t lastPage = pageAddr + curNumPages - 1;
+    for(size_t i = 0; i < to_dealloc; i++) {
+      memoryMap->unset(lastPage - i);
+    }
+    return ptr;
+  } else if(curNumPages < targetNumPages) {
+    os::scoped_lock l(spinlock);
+    size_t to_alloc = targetNumPages - curNumPages;
+    if(memoryMap->free_slots_after(pageAddr) >= to_alloc) {
+      for(size_t i = 0; i < to_alloc; i++) {
+        memoryMap->set(pageAddr + i + 1);
+      }
+      hdr->chunkSize = s;
+      return ptr;
+    } else {
+      // Need to move block
+      panic("UNIMPLEMENTED");
+      return nullptr;
+    }
+  } else {
+    hdr->chunkSize = s;
+    return ptr;
+  }
 }
 
 void free(void* ptr) {
@@ -333,6 +377,15 @@ ThreadData os::Paging::makeThread() {
   lastDirEntry.rw = 1;
 
   return {dir, 0xFFFFFFFF, stackPage + 0xFFF};
+}
+
+void os::Paging::freeThread(const ThreadData& data) {
+  os::scoped_lock l(spinlock);
+
+  auto& lastDirEntry = (*data.directory)[1023];
+  PageTable* stackTable = (PageTable*)(lastDirEntry.addr << 12);
+  freeTable(stackTable);
+  freeDirectory(data.directory);
 }
 
 PageDirectory* os::Paging::currentDirectory() {

@@ -40,12 +40,12 @@ struct Elf32_Shdr {
 };
 
 struct Elf32_Sym {
-  uint32_t    st_name;                /* Symbol name (string tbl index) */
-  uintptr_t    st_value;               /* Symbol value */
-  uint32_t    st_size;                /* Symbol size */
-  unsigned char st_info;                /* Symbol type and binding */
-  unsigned char st_other;               /* Symbol visibility */
-  uint16_t st_shndx;               /* Section index */
+  uint32_t  st_name;                /* Symbol name (string tbl index) */
+  uintptr_t st_value;               /* Symbol value */
+  uint32_t  st_size;                /* Symbol size */
+  unsigned char st_info;            /* Symbol type and binding */
+  unsigned char st_other;           /* Symbol visibility */
+  uint16_t st_shndx;                /* Section index */
 };
 
 static Elf32_Shdr* headers = nullptr;

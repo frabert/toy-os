@@ -1,10 +1,13 @@
 #pragma once
 
 #ifdef __cplusplus
+#define NORETURN [[noreturn]]
 extern "C" {
+#else
+#define NORETURN
 #endif
 
-void panic_raw(const char *error);
+NORETURN void panic_raw(const char *error);
 
 #ifdef __cplusplus
 }

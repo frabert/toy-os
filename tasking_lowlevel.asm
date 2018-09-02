@@ -8,9 +8,9 @@ task_switch:
   mov edi, [esp + (4+1)*4] ; Address of current task's descriptor
   mov esi, [esp + (4+2)*4] ; Address of next task's descriptor
 
-  mov [edi + 5*4], esp ; Save old task's stack
-  mov esp, [esi + 5*4]
-  mov eax, [esi + 2*4]
+  mov [edi + 3*4], esp ; Save old task's stack
+  mov esp, [esi + 3*4]
+  mov eax, [esi + 0*4]
   mov ecx, cr3
   cmp eax, ecx
   je .endSwitch

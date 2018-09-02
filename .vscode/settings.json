@@ -49,5 +49,10 @@
     "**/*.o": true,
     "**/*.a": true,
     "**/*.iso": true
-  }
+  },
+  "C_Cpp.default.intelliSenseMode": "clang-x64",
+  "C_Cpp.default.compilerPath": "C:/cross/bin/i786-elf-g++.exe",
+  "C_Cpp.default.includePath":["C:/cross/lib/gcc/i786-elf/8.1.0/include", "${workspaceFolder}/include"],
+  "C_Cpp.default.cppStandard": "c++17",
+  "C_Cpp.default.cStandard": "c11"
 }

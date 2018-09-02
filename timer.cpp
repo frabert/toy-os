@@ -4,14 +4,27 @@
 #include "screen.h"
 #include "debug.h"
 #include "tasking.h"
+#include "time.h"
+
+using namespace os::Time;
 
 void timer_handler(os::Interrupts::Registers*);
 
+static os::Time::TimeSpan timeSinceBoot{0};
+static os::Time::TimeSpan timerPeriod{0};
+
 void timer_handler(os::Interrupts::Registers*) {
-  os::Tasking::switchTasks();
+  timeSinceBoot += timerPeriod;
+  os::Tasking::timer_tick(timeSinceBoot);
+  //os::Tasking::switchTasks();
+}
+
+os::Time::TimeSpan os::Time::since_boot() {
+  return timeSinceBoot;
 }
 
 void os::Timer::init(uint32_t frequency) {
+  timerPeriod = 1_s / frequency;
   // Firstly, register our timer callback.
   registerInterruptHandler(os::Interrupts::IRQ0, timer_handler);
 

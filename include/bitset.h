@@ -28,6 +28,15 @@ namespace os {
       return m_freeSlots;
     }
 
+    size_t free_slots_after(size_t n) const {
+      size_t count = 0;
+      size_t i = n + 1;
+      while(i < m_size) {
+        if(test(i++)) return count;
+      }
+      return count;
+    }
+
     size_t firstFree() const {
       if(m_freeSlots == 0) return (T)-1;
 

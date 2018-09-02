@@ -10,6 +10,8 @@
 #include "tasking.h"
 #include "debug.h"
 
+#include <priority_queue.h>
+
 using os::Screen;
 
 static void func(void);
@@ -33,7 +35,7 @@ int kmain(multiboot_info_t *mboot_ptr) {
   os::DescriptorTables::init();
   screen.write("Descriptor tables initialized\n");
   asm volatile("sti");
-  os::Timer::init(50);
+  os::Timer::init(100);
 
   multiboot_memory_map_t* mmap;
   if(mboot_ptr->flags & (1 << 6)) {
@@ -50,17 +52,28 @@ int kmain(multiboot_info_t *mboot_ptr) {
     os::Paging::getFreeHeap() >> 10);
 
   os::Tasking::init();
-  os::Tasking::Thread* t1 = os::Tasking::Thread::start(&func);
+  auto t1 = os::Tasking::Task::start(&func);
 
-  os::Tasking::Thread* t2 = os::Tasking::Thread::start(&func3);
-  os::Tasking::Thread* t3 = os::Tasking::Thread::start(&func4);
+  auto t2 = os::Tasking::Task::start(&func3);
+  auto t3 = os::Tasking::Task::start(&func4);
 
-  os::std::array<os::Tasking::Waitable*, 2> ts;
-  ts[0] = t2;
-  ts[1] = t3;
+  t2->wait();
+  screen.write("t2 end\n");
+  t3->wait();
+  screen.write("t3 end\n");
 
-  auto t4 = os::Tasking::Waitable::wait_one(ts.data(), 2);
-  t4->wait();
+  os::std::priority_queue<int> pq;
+  pq.push(4);
+  pq.push(10);
+  pq.push(3);
+  pq.push(5);
+  pq.push(1);
+
+  while(!pq.empty()) {
+    screen.write("% ", pq.top());
+    pq.pop();
+  }
+  screen.write("\n");
 
   while(true) {
     os::Screen::getInstance().write("foobar!\n");
@@ -73,28 +86,33 @@ int kmain(multiboot_info_t *mboot_ptr) {
 }
 
 void func() {
-  os::Tasking::Thread* t = os::Tasking::Thread::start(&func2);
-  os::Screen::getInstance().write("foo!\n");
+  os::Tasking::unlock_scheduler();
+  auto t = os::Tasking::Task::start(&func2);
+  Screen::getInstance().write("foo!\n");
   t->wait();
   for(size_t i = 0; i < 0xFFFFFFF; i++) { }
 }
 
-
 void func2() {
-  os::Screen::getInstance().write("bar!\n");
+  os::Tasking::unlock_scheduler();
+  Screen::getInstance().write("bar!\n");
   for(size_t i = 0; i < 0xFFFFFF1; i++) { }
-  os::Screen::getInstance().write("baz\n");
+  Screen::getInstance().write("baz\n");
 }
 
 void func3() {
-  os::Screen::getInstance().write("barbaz fast!\n");
+  os::Tasking::unlock_scheduler();
+  Screen::getInstance().write("barbaz fast!\n");
   for(size_t i = 0; i < 0xFFFFFF1; i++) { }
   for(size_t i = 0; i < 0xFFFFFF1; i++) { }
+  Screen::getInstance().write("barbaz fast end!\n");
 }
 
 void func4() {
-  os::Screen::getInstance().write("barbaz slow!\n");
+  os::Tasking::unlock_scheduler();
+  Screen::getInstance().write("barbaz slow!\n");
   for(size_t i = 0; i < 0xFFFFFF1; i++) { }
   for(size_t i = 0; i < 0xFFFFFF1; i++) { }
   for(size_t i = 0; i < 0xFFFFFF1; i++) { }
+  Screen::getInstance().write("barbaz slow end!\n");
 }

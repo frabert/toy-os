@@ -6,18 +6,34 @@
     {
       "label": "clean",
       "type": "shell",
-      "command": "make clean"
+      "command": "make clean",
+      "windows": {
+        "command": "c:\\Windows\\system32\\bash.exe",
+        "args": [
+          "-c",
+          "cd /mnt/c/Users/berto/Documents/GitHub/toy-os; make clean"
+        ]
+      },
+      "problemMatcher": []
     },
     {
       "label": "build",
       "type": "shell",
-      "dependsOn": [
-        "clean"
-      ],
       "command": "make kernel.iso",
       "problemMatcher": [
         "$gcc"
-      ]
+      ],
+      "windows": {
+        "command": "c:\\Windows\\system32\\bash.exe",
+        "args": [
+          "-c",
+          "cd /mnt/c/Users/berto/Documents/GitHub/toy-os; make kernel.iso"
+        ]
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
     },
     {
       "label": "run",
@@ -34,7 +50,20 @@
       ],
       "type": "shell",
       "command": "make debug",
-      "isBackground": true
+      "windows": {
+        "command": "c:\\Program Files\\qemu\\qemu-system-i386w.exe",
+        "args": [
+          "-cdrom",
+          "kernel.iso",
+          "-m",
+          "32",
+          "-s",
+          "-S",
+          "-no-shutdown",
+          "-no-reboot"
+        ]
+      },
+      "problemMatcher": []
     }
   ]
 }

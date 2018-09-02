@@ -84,6 +84,13 @@ namespace os {
      * \return A pair of the new directory and a pointer to the beginning of the stack 
      */
     ThreadData makeThread();
+    
+    /**
+     * \brief Deallocates the pages for a thread's stack
+     * 
+     * \param data The thread's data
+     */
+    void freeThread(const ThreadData& data);
 
     /**
      * \brief Whether the heap is active or not
